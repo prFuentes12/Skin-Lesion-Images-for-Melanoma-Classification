@@ -4,6 +4,12 @@ import os
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+import tensorflow as tf
+from tensorflow.keras.callbacks import TensorBoard
+from sklearn.model_selection import train_test_split
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+
+
 
 # ----------------------------------------------------------
 # Download and move dataset
@@ -12,7 +18,7 @@ import seaborn as sns
 # Download the latest version of the dataset
 path = kagglehub.dataset_download("andrewmvd/isic-2019")
 print("Path to dataset files:", path)
-
+ 
 # Set destination folder
 dest_path = "../dataset"
 os.makedirs(dest_path, exist_ok=True)
@@ -24,6 +30,8 @@ for item in os.listdir(path):
     shutil.move(src, dst)
 
 print("All content moved to:", dest_path)
+
+
 
 # ----------------------------------------------------------
 # Load and merge CSVs
@@ -50,6 +58,8 @@ combined_df.to_csv(os.path.join(dest_path, "combined.csv"), index=False)
 
 print("Combined DataFrame (sample):")
 print(combined_df.head())
+
+
 
 # ----------------------------------------------------------
 # EDA (Exploratory Data Analysis)
@@ -192,10 +202,69 @@ plt.show()
 # Count images per diagnosis in the resized folder
 # ----------------------------------------------------------
 
-resized_folder = os.path.join(dest_path, "resized_512")
-available_files = set(os.listdir(resized_folder))
-df_filtered = df[df['image'].isin(available_files)]
+resized_folder = "../dataset/resized_512"
 
-counts = df_filtered['diagnosis'].value_counts()
-print("Number of images per diagnosis in the 'resized_512' folder:")
-print(counts)
+# Train-validation split
+train_df, val_df = train_test_split(df, test_size=0.2, stratify=df['diagnosis'], random_state=42)
+
+# ImageDataGenerators
+train_datagen = ImageDataGenerator(
+    rescale=1./255,
+    rotation_range=20,
+    horizontal_flip=True,
+    vertical_flip=True
+)
+
+val_datagen = ImageDataGenerator(rescale=1./255)
+
+# Load images from dataframe
+train_generator = train_datagen.flow_from_dataframe(
+    dataframe=train_df,
+    directory=resized_folder,
+    x_col='image',
+    y_col='diagnosis',
+    target_size=(512, 512),
+    batch_size=32,
+    class_mode='categorical'
+)
+val_generator = val_datagen.flow_from_dataframe(
+    dataframe=val_df,
+    directory=resized_folder,
+    x_col='image',
+    y_col='diagnosis',
+    target_size=(512, 512),
+    batch_size=32,
+    class_mode='categorical'
+)
+
+model = tf.keras.models.Sequential([
+    
+    tf.keras.layers.Conv2D(32, (3,3), activation='relu', input_shape=(512, 512, 3)),
+    tf.keras.layers.MaxPooling2D(2, 2),
+
+    tf.keras.layers.Conv2D(64, (3,3), activation='relu'),
+    tf.keras.layers.MaxPooling2D(2, 2),
+
+    tf.keras.layers.Conv2D(128, (3,3), activation='relu'),
+    tf.keras.layers.MaxPooling2D(2, 2),
+
+    tf.keras.layers.Flatten(),
+    tf.keras.layers.Dense(100, activation='relu'),
+    tf.keras.layers.Dense(train_generator.get_classes, activation='softmax')
+])
+
+model.compile(
+    optimizer='adam',
+    loss='sparse_categorical_crossentropy',
+    metrics=['accuracy']
+)
+
+tensorboard_callback = TensorBoard(log_dir="logs/exp", histogram_freq=1)
+
+# Model training
+model.fit(
+    train_generator,
+    validation_data=val_generator,
+    epochs=10,
+    callbacks=[tensorboard_callback]
+)
