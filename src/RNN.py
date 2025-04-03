@@ -1,7 +1,6 @@
 import kagglehub
 import shutil
 import os
-from PIL import Image
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -129,42 +128,42 @@ plt.show()
 # Image resolution analysis
 # ----------------------------------------------------------
 
-# Path to the folder containing the images
-image_folder = "..\dataset\ISIC_2019_Training_Input"
+# # Path to the folder containing the images
+# image_folder = "..\dataset\ISIC_2019_Training_Input"
 
-# Verify the path
-print("Absolute path to image folder:", os.path.abspath(image_folder))
+# # Verify the path
+# print("Absolute path to image folder:", os.path.abspath(image_folder))
 
-if not os.path.exists(image_folder):
-    print("Image folder does not exist:", image_folder)
-    exit()
+# if not os.path.exists(image_folder):
+#     print("Image folder does not exist:", image_folder)
+#     exit()
 
-# Dictionary to store unique resolutions and their counts
-resolutions = {}
-valid_extensions = ('.jpg', '.jpeg', '.png')
+# # Dictionary to store unique resolutions and their counts
+# resolutions = {}
+# valid_extensions = ('.jpg', '.jpeg', '.png')
 
-# Iterate through the files in the folder
-for img_name in os.listdir(image_folder):
-    if not img_name.lower().endswith(valid_extensions):
-        continue  # Skip non-image files
+# # Iterate through the files in the folder
+# for img_name in os.listdir(image_folder):
+#     if not img_name.lower().endswith(valid_extensions):
+#         continue  # Skip non-image files
 
-    img_path = os.path.join(image_folder, img_name)
+#     img_path = os.path.join(image_folder, img_name)
 
-    try:
-        with Image.open(img_path) as img:
-            width, height = img.size
-            res = (height, width)  # Store as (height, width)
-            resolutions[res] = resolutions.get(res, 0) + 1
-    except Exception as e:
-        print(f"Error opening {img_name}: {e}")
+#     try:
+#         with Image.open(img_path) as img:
+#             width, height = img.size
+#             res = (height, width)  # Store as (height, width)
+#             resolutions[res] = resolutions.get(res, 0) + 1
+#     except Exception as e:
+#         print(f"Error opening {img_name}: {e}")
 
-# Display the unique resolutions and how many images match each
-if resolutions:
-    print("\nUnique resolutions found (Height x Width) and number of images:")
-    for res, count in resolutions.items():
-        print(f"{res}: {count} images")
-else:
-    print("No valid image files found.")
+# # Display the unique resolutions and how many images match each
+# if resolutions:
+#     print("\nUnique resolutions found (Height x Width) and number of images:")
+#     for res, count in resolutions.items():
+#         print(f"{res}: {count} images")
+# else:
+#     print("No valid image files found.")
 
 
 
@@ -172,32 +171,51 @@ else:
 # Images Resampling
 # ----------------------------------------------------------
 
-# Output folder for resized images
-output_folder = "../dataset/resized_512"
-os.makedirs(output_folder, exist_ok=True)
+# # Output folder for resized images
+# output_folder = "../dataset/resized_512"
+# os.makedirs(output_folder, exist_ok=True)
 
-# Desired size
-target_size = (512, 512)
+# # Desired size
+# target_size = (512, 512)
 
-# Image extensions to include
-valid_extensions = ('.jpg', '.jpeg', '.png')
+# # Image extensions to include
+# valid_extensions = ('.jpg', '.jpeg', '.png')
 
-# Process each image
-count = 0
-for filename in os.listdir(image_folder):
-    if not filename.lower().endswith(valid_extensions):
-        continue
+# # Process each image
+# count = 0
+# for filename in os.listdir(image_folder):
+#     if not filename.lower().endswith(valid_extensions):
+#         continue
 
-    input_path = os.path.join(image_folder, filename)
-    output_path = os.path.join(output_folder, filename)
+#     input_path = os.path.join(image_folder, filename)
+#     output_path = os.path.join(output_folder, filename)
 
-    try:
-        with Image.open(input_path) as img:
-            # Resize and save
-            resized = img.resize(target_size, Image.Resampling.LANCZOS)
-            resized.save(output_path)
-            count += 1
-    except Exception as e:
-        print(f"Failed to process {filename}: {e}")
+#     try:
+#         with Image.open(input_path) as img:
+#             # Resize and save
+#             resized = img.resize(target_size, Image.Resampling.LANCZOS)
+#             resized.save(output_path)
+#             count += 1
+#     except Exception as e:
+#         print(f"Failed to process {filename}: {e}")
 
-print(f"\n {count} images resized and saved to '{output_folder}'")
+# print(f"\n {count} images resized and saved to '{output_folder}'")
+
+# Ruta al CSV combinado
+csv_path = "../dataset/combined.csv"
+
+# Carpeta con imágenes redimensionadas
+resized_folder = "../dataset/resized_512"
+
+# Leer el CSV combinado
+df = pd.read_csv(csv_path)
+
+# Filtrar solo imágenes que existen en la carpeta resized
+available_files = set(os.listdir(resized_folder))
+df_filtered = df[df['image'].isin(available_files)]
+
+# Contar cuántas imágenes hay por diagnóstico en la carpeta resized
+counts = df_filtered['diagnosis'].value_counts()
+
+print("📊 Número de imágenes por diagnóstico en la carpeta resized_512:")
+print(counts)
