@@ -237,25 +237,27 @@ val_generator = val_datagen.flow_from_dataframe(
     class_mode='categorical'
 )
 
+num_classes = len(train_generator.class_indices)
+
 model = tf.keras.models.Sequential([
-    
-    tf.keras.layers.Conv2D(32, (3,3), activation='relu', input_shape=(512, 512, 3)),
+    tf.keras.layers.Input(shape=(512, 512, 3)), 
+    tf.keras.layers.Conv2D(32, (3, 3), activation='relu'),
     tf.keras.layers.MaxPooling2D(2, 2),
 
-    tf.keras.layers.Conv2D(64, (3,3), activation='relu'),
+    tf.keras.layers.Conv2D(64, (3, 3), activation='relu'),
     tf.keras.layers.MaxPooling2D(2, 2),
 
-    tf.keras.layers.Conv2D(128, (3,3), activation='relu'),
+    tf.keras.layers.Conv2D(128, (3, 3), activation='relu'),
     tf.keras.layers.MaxPooling2D(2, 2),
 
-    tf.keras.layers.Flatten(),
+    tf.keras.layers.Flatten(),  # Required before Dense
     tf.keras.layers.Dense(100, activation='relu'),
-    tf.keras.layers.Dense(train_generator.get_classes, activation='softmax')
+    tf.keras.layers.Dense(num_classes, activation='softmax')
 ])
 
 model.compile(
     optimizer='adam',
-    loss='sparse_categorical_crossentropy',
+    loss='categorical_crossentropy',
     metrics=['accuracy']
 )
 
@@ -268,3 +270,5 @@ model.fit(
     epochs=10,
     callbacks=[tensorboard_callback]
 )
+
+
