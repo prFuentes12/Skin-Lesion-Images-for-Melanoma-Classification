@@ -210,9 +210,14 @@ train_df, val_df = train_test_split(df, test_size=0.2, stratify=df['diagnosis'],
 # ImageDataGenerators
 train_datagen = ImageDataGenerator(
     rescale=1./255,
-    rotation_range=20,
+    rotation_range=30,
+    width_shift_range=0.1,
+    height_shift_range=0.1,
+    zoom_range=0.2,
+    shear_range=0.2,
     horizontal_flip=True,
-    vertical_flip=True
+    vertical_flip=True,
+    fill_mode='nearest'
 )
 
 val_datagen = ImageDataGenerator(rescale=1./255)
@@ -240,23 +245,22 @@ val_generator = val_datagen.flow_from_dataframe(
 num_classes = len(train_generator.class_indices)
 
 model = tf.keras.models.Sequential([
-    tf.keras.layers.Input(shape=(512, 512, 3)), 
-    tf.keras.layers.Conv2D(32, (3, 3), activation='relu'),
+    tf.keras.layers.Conv2D(32, (3,3), activation='relu', input_shape=(512, 512, 3)),
     tf.keras.layers.MaxPooling2D(2, 2),
 
-    tf.keras.layers.Conv2D(64, (3, 3), activation='relu'),
+    tf.keras.layers.Conv2D(64, (3,3), activation='relu'),
     tf.keras.layers.MaxPooling2D(2, 2),
 
-    tf.keras.layers.Conv2D(128, (3, 3), activation='relu'),
+    tf.keras.layers.Conv2D(128, (3,3), activation='relu'),
     tf.keras.layers.MaxPooling2D(2, 2),
 
-    tf.keras.layers.Flatten(),  # Required before Dense
+    tf.keras.layers.Flatten(),
     tf.keras.layers.Dense(100, activation='relu'),
-    tf.keras.layers.Dense(num_classes, activation='softmax')
+    tf.keras.layers.Dense(8, activation='softmax')
 ])
 
 model.compile(
-    optimizer='adam',
+    optimizer=tf.keras.optimizers.Adam(learning_rate=1e-4),
     loss='categorical_crossentropy',
     metrics=['accuracy']
 )
@@ -267,8 +271,6 @@ tensorboard_callback = TensorBoard(log_dir="logs/exp", histogram_freq=1)
 model.fit(
     train_generator,
     validation_data=val_generator,
-    epochs=10,
+    epochs=15,
     callbacks=[tensorboard_callback]
 )
-
-
