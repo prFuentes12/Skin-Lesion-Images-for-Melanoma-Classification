@@ -5,11 +5,12 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import tensorflow as tf
-from tensorflow.keras.callbacks import TensorBoard
 from sklearn.model_selection import train_test_split
-from tensorflow.keras.preprocessing.image import ImageDataGenerator
-
-
+from tensorflow.keras.preprocessing.image import ImageDataGenerator # type: ignore
+from PIL import Image
+from sklearn.utils.class_weight import compute_class_weight
+from sklearn.preprocessing import LabelEncoder
+import numpy as np
 
 # ----------------------------------------------------------
 # Download and move dataset
@@ -18,8 +19,7 @@ from tensorflow.keras.preprocessing.image import ImageDataGenerator
 # Download the latest version of the dataset
 path = kagglehub.dataset_download("andrewmvd/isic-2019")
 print("Path to dataset files:", path)
- 
-# Set destination folder
+
 dest_path = "../dataset"
 os.makedirs(dest_path, exist_ok=True)
 
@@ -30,8 +30,6 @@ for item in os.listdir(path):
     shutil.move(src, dst)
 
 print("All content moved to:", dest_path)
-
-
 
 # ----------------------------------------------------------
 # Load and merge CSVs
@@ -44,7 +42,6 @@ labels_path = os.path.join(dest_path, "ISIC_2019_Training_GroundTruth.csv")
 metadata_df = pd.read_csv(metadata_path)
 labels_df = pd.read_csv(labels_path)
 
-# Add .jpg extension to match image filenames
 metadata_df['image'] = metadata_df['image'].astype(str) + '.jpg'
 labels_df['image'] = labels_df['image'].astype(str) + '.jpg'
 
@@ -58,8 +55,6 @@ combined_df.to_csv(os.path.join(dest_path, "combined.csv"), index=False)
 
 print("Combined DataFrame (sample):")
 print(combined_df.head())
-
-
 
 # ----------------------------------------------------------
 # EDA (Exploratory Data Analysis)
@@ -76,7 +71,6 @@ sns.set_theme(style="whitegrid")
 print("\nMissing values per column:")
 print(df.isnull().sum())
 
-# 2. Count of each diagnosis
 diagnosis_counts = df['diagnosis'].value_counts()
 print("\nNumber of images per diagnosis:")
 print(diagnosis_counts)
@@ -120,97 +114,61 @@ plt.ylabel("Anatomical Site")
 plt.tight_layout()
 plt.show()
 
-
 # ----------------------------------------------------------
-# Image resolution analysis
-# ----------------------------------------------------------
-
-# # Path to the folder containing the images
-# image_folder = "..\dataset\ISIC_2019_Training_Input"
-
-# # Verify the path
-# print("Absolute path to image folder:", os.path.abspath(image_folder))
-
-# if not os.path.exists(image_folder):
-#     print("Image folder does not exist:", image_folder)
-#     exit()
-
-# # Dictionary to store unique resolutions and their counts
-# resolutions = {}
-# valid_extensions = ('.jpg', '.jpeg', '.png')
-
-# # Iterate through the files in the folder
-# for img_name in os.listdir(image_folder):
-#     if not img_name.lower().endswith(valid_extensions):
-#         continue  # Skip non-image files
-
-#     img_path = os.path.join(image_folder, img_name)
-
-#     try:
-#         with Image.open(img_path) as img:
-#             width, height = img.size
-#             res = (height, width)  # Store as (height, width)
-#             resolutions[res] = resolutions.get(res, 0) + 1
-#     except Exception as e:
-#         print(f"Error opening {img_name}: {e}")
-
-# # Display the unique resolutions and how many images match each
-# if resolutions:
-#     print("\nUnique resolutions found (Height x Width) and number of images:")
-#     for res, count in resolutions.items():
-#         print(f"{res}: {count} images")
-# else:
-#     print("No valid image files found.")
-
-
-
-# ----------------------------------------------------------
-# Images Resampling
+# Resize Images
 # ----------------------------------------------------------
 
-# # Output folder for resized images
-# output_folder = "../dataset/resized_512"
+# image_folder = os.path.join(dest_path, "ISIC_2019_Training_Input")
+# output_folder = os.path.join(dest_path, "resized_255")
 # os.makedirs(output_folder, exist_ok=True)
 
-# # Desired size
-# target_size = (512, 512)
-
-# # Image extensions to include
+# target_size = (255, 255)
 # valid_extensions = ('.jpg', '.jpeg', '.png')
-
-# # Process each image
 # count = 0
+
 # for filename in os.listdir(image_folder):
 #     if not filename.lower().endswith(valid_extensions):
 #         continue
-
 #     input_path = os.path.join(image_folder, filename)
 #     output_path = os.path.join(output_folder, filename)
-
 #     try:
 #         with Image.open(input_path) as img:
-#             # Resize and save
 #             resized = img.resize(target_size, Image.Resampling.LANCZOS)
 #             resized.save(output_path)
 #             count += 1
 #     except Exception as e:
 #         print(f"Failed to process {filename}: {e}")
 
-# print(f"\n {count} images resized and saved to '{output_folder}'")
+# print(f"\n{count} images resized and saved to '{output_folder}'")
 
 # ----------------------------------------------------------
-# Count images per diagnosis in the resized folder
+# Preprocessing & Class Weight
 # ----------------------------------------------------------
 
-resized_folder = "../dataset/resized_512"
+resized_folder = "../dataset/resized_255"
+
 
 # Train-validation split
 train_df, val_df = train_test_split(df, test_size=0.2, stratify=df['diagnosis'], random_state=42)
 
-# ImageDataGenerators
+le = LabelEncoder()
+train_df['diagnosis_encoded'] = le.fit_transform(train_df['diagnosis'])
+
+class_weights = compute_class_weight(
+    class_weight='balanced',
+    classes=np.unique(train_df['diagnosis_encoded']),
+    y=train_df['diagnosis_encoded']
+)
+class_weights_dict = {label: weight for label, weight in zip(np.unique(train_df['diagnosis_encoded']), class_weights)}
+
 train_datagen = ImageDataGenerator(
     rescale=1./255,
-    rotation_range=20,
+    rotation_range=25,
+    width_shift_range=0.1,
+    height_shift_range=0.1,
+    shear_range=0.1,
+    zoom_range=0.2,
+    brightness_range=[0.85, 1.15],
     horizontal_flip=True,
     vertical_flip=True
 )
@@ -223,7 +181,7 @@ train_generator = train_datagen.flow_from_dataframe(
     directory=resized_folder,
     x_col='image',
     y_col='diagnosis',
-    target_size=(512, 512),
+    target_size=(255, 255),
     batch_size=32,
     class_mode='categorical'
 )
@@ -232,26 +190,38 @@ val_generator = val_datagen.flow_from_dataframe(
     directory=resized_folder,
     x_col='image',
     y_col='diagnosis',
-    target_size=(512, 512),
+    target_size=(255, 255),
     batch_size=32,
     class_mode='categorical'
 )
 
+# ----------------------------------------------------------
+# Model Definition
+# ----------------------------------------------------------
+
 num_classes = len(train_generator.class_indices)
 
-model = tf.keras.models.Sequential([
-    tf.keras.layers.Input(shape=(512, 512, 3)), 
-    tf.keras.layers.Conv2D(32, (3, 3), activation='relu'),
+model = tf.keras.Sequential([
+    tf.keras.layers.Input(shape=(255, 255, 3)),
+    tf.keras.layers.Conv2D(64, (3, 3), activation='relu', padding='same'),
+    tf.keras.layers.BatchNormalization(),
     tf.keras.layers.MaxPooling2D(2, 2),
 
-    tf.keras.layers.Conv2D(64, (3, 3), activation='relu'),
+    tf.keras.layers.Conv2D(128, (3, 3), activation='relu', padding='same'),
+    tf.keras.layers.BatchNormalization(),
     tf.keras.layers.MaxPooling2D(2, 2),
 
-    tf.keras.layers.Conv2D(128, (3, 3), activation='relu'),
+    tf.keras.layers.Conv2D(256, (3, 3), activation='relu', padding='same'),
+    tf.keras.layers.BatchNormalization(),
     tf.keras.layers.MaxPooling2D(2, 2),
+    tf.keras.layers.Dropout(0.4),
 
-    tf.keras.layers.Flatten(),  # Required before Dense
-    tf.keras.layers.Dense(100, activation='relu'),
+    tf.keras.layers.Conv2D(512, (3, 3), activation='relu', padding='same'),
+    tf.keras.layers.BatchNormalization(),
+    tf.keras.layers.GlobalAveragePooling2D(),
+
+    tf.keras.layers.Dense(256, activation='relu'),
+    tf.keras.layers.Dropout(0.5),
     tf.keras.layers.Dense(num_classes, activation='softmax')
 ])
 
@@ -261,14 +231,39 @@ model.compile(
     metrics=['accuracy']
 )
 
-tensorboard_callback = TensorBoard(log_dir="logs/exp", histogram_freq=1)
+# ----------------------------------------------------------
+# Train Model with Class Weights
+# ----------------------------------------------------------
 
-# Model training
-model.fit(
+history = model.fit(
     train_generator,
     validation_data=val_generator,
-    epochs=10,
-    callbacks=[tensorboard_callback]
+    epochs=30,
+    class_weight=class_weights_dict
 )
 
+# ----------------------------------------------------------
+# Plot Accuracy & Loss
+# ----------------------------------------------------------
 
+plt.figure(figsize=(8, 5))
+plt.plot(history.history['accuracy'], label='Train Accuracy')
+plt.plot(history.history['val_accuracy'], label='Validation Accuracy')
+plt.title('Model Accuracy Over Epochs')
+plt.xlabel('Epoch')
+plt.ylabel('Accuracy')
+plt.legend()
+plt.grid(True)
+plt.tight_layout()
+plt.show()
+
+plt.figure(figsize=(8, 5))
+plt.plot(history.history['loss'], label='Train Loss')
+plt.plot(history.history['val_loss'], label='Validation Loss')
+plt.title('Model Loss Over Epochs')
+plt.xlabel('Epoch')
+plt.ylabel('Loss')
+plt.legend()
+plt.grid(True)
+plt.tight_layout()
+plt.show()
