@@ -85,7 +85,6 @@ plt.xticks(rotation=45)
 plt.tight_layout()
 plt.show()
 
-# 3. Age distribution by diagnosis
 plt.figure(figsize=(12, 6))
 sns.boxplot(x='diagnosis', y='age_approx', data=df)
 plt.title("Age Distribution by Diagnosis")
